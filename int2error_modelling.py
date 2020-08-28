@@ -1,7 +1,7 @@
-#create a model that predicts the error of sizing for frames of different intensities 
 import numpy as np
 from numpy import random
-
+import multiprocessing as mp
+import ctypes
 #tt = [1,2,3,4,5,6,7]
 #x = random.poisson(lam=tt, size=1000)
 
@@ -20,19 +20,8 @@ gap_bottom_pix = 86
 
 
 det_dist = 100 # mm
-x,y = np.indices((1024,1024));
-radii = ((x-511.5)**2+(y-511.5)**2)**0.5
 intrad = np.load('../aux/intrad_004.npy')
-mask_h = np.load('../aux/mask_002_hitfinding6.npy')
-mask_c = np.load('../aux/mask_cmc6.npy')
-mask_center = mask_h & mask_c
 intrad = intrad[256:768,256:512]
-mask_center = mask_center[256:768,256:512]
-x = x[256:768,256:512]
-y = y[256:768,256:512]
-x_mask = x[mask_center]
-y_mask = y[mask_center]
-flotrad = intrad[mask_center]
 
 mask_center = np.load('../aux/mask_center_cmc_1.npy')
 radcount = np.zeros(intrad.max() + 1)
@@ -40,17 +29,14 @@ np.add.at(radcount, intrad, mask_center)
 radmask = (radcount > 10)
 radcount[radcount == 0] = 1
 
+#create 2D model frame for dia = 30
 qvals = 2. * np.sin(0.5 * np.arctan(intrad * 0.075 / det_dist)) / 4.5
 diameters_30 = 30
 svals = np.outer(diameters_30, qvals) * np.pi
 svals[svals==0] = 1e-6
 spheremodel_30 = (np.sin(svals) - svals * np.cos(svals))**2 / svals**6 * diameters_30**6
-#model_30_mask_01 = spheremodel_30.reshape(1024,1024)*mask_h*mask_c
-#model_30_mask_02 = spheremodel_30.reshape(1024,1024)*mask_center
 model_30_mask = spheremodel_30.reshape(512,256)[mask_center]
 model_30_mask0 = model_30_mask/np.sum(model_30_mask)
-x_mask = x[mask_center]
-y_mask = y[mask_center]
 flotrad = intrad[mask_center]
 
 #intens_model = np.arange(0, 20000, 100)
@@ -60,7 +46,7 @@ n_models = len(intens_model)
 #fitting_model
 det_dist = 100 # mm
 qvals = 2. * np.sin(0.5 * np.arctan(np.arange(int(intrad.max())+1) * 0.075 / det_dist)) / 4.5
-diameters = np.linspace(20, 40, 1000)
+diameters = np.linspace(10, 50, 2000)
 svals = np.outer(diameters, qvals) * np.pi
 svals[svals==0] = 1e-6
 spheremodels = (np.sin(svals) - svals * np.cos(svals))**2 / svals**6 * diameters[:,np.newaxis]**6
@@ -68,126 +54,46 @@ spheremodels = (np.sin(svals) - svals * np.cos(svals))**2 / svals**6 * diameters
 
 dia_all = np.zeros((n_models,1000))
 cc_all = np.zeros((n_models,1000))
-std_all = np.zeros(n_models)
+std_model = np.zeros(n_models)
 for i in range(n_models):
     model_30_maski = model_30_mask0*intens_model[i]
     fake_datai = np.array([random.poisson(lam=i, size=1000) for i in model_30_maski]).T
-    diamax = np.zeros(1000)
-    ccmax = np.zeros(1000)
-    for j in range(1000):
-        radavg = np.zeros_like(radcount)
-        tdata = fake_datai[j]
-        np.add.at(radavg, flotrad, tdata)
-        radavg /= radcount
+    #fake_datai = random.poisson(lam=model_30_maski, size=(1000,len(model_30_maski)))
 
-        corrs = np.corrcoef(radavg[radmask], spheremodels[:,radmask])[0, 1:]
-        ccmax[j] = corrs.max()
-        diamax[j] = diameters[corrs.argmax()]
+###############################################
+    diamax = mp.Array(ctypes.c_double, 1000)
+    ccmax = mp.Array(ctypes.c_double, 1000)
 
-    std_all[i] = np.std(diamax)
+    def mp_worker(rank, indices, diamax, ccmax):
+        jrange = indices[rank::nproc]
+
+        for j in jrange:
+            radavg = np.zeros_like(radcount)
+            tdata = fake_datai[j]
+            np.add.at(radavg, flotrad, tdata)
+            radavg /= radcount
+
+            corrs = np.corrcoef((radavg*radcount)[radmask], (radcount*spheremodels)[:,radmask])[0, 1:] #====weighted
+            #corrs = np.corrcoef(radavg[radmask], spheremodels[:,radmask])[0, 1:] #====unweighted
+            ccmax[j] = corrs.max()
+            diamax[j] = diameters[corrs.argmax()]
+
+            #if rank == 0:
+                #print("CC (%d):"%j, ' CC = ', ccmax[j], ' dia = ', diamax[j])
+
+    nproc = 16
+    indices = np.arange(1000)
+    jobs = [mp.Process(target=mp_worker, args=(rank, indices, diamax, ccmax)) for rank in range(nproc)]
+    [j.start() for j in jobs]
+    [j.join() for j in jobs]
+    diamax = np.frombuffer(diamax.get_obj())
+    ccmax = np.frombuffer(ccmax.get_obj())
+###############################################
+    std_model[i] = np.sqrt(np.sum((diamax-30)**2)/999)
     dia_all[i] = diamax
     cc_all[i] = ccmax
-    print('i = ',i, ' std = ', std_all[i])
+    print('i = ',i, ' std = ', std_model[i], ' dia = ', np.mean(dia_all[i]))
 
 
-np.savez('int2std_model_r30_mask1.npz', cc_all=cc_all, dia_all=dia_all, std_all=std_all, intens_model=intens_model)
+np.savez('int2std_model_r30_mask1_weighted.npz', cc_all=cc_all, dia_all=dia_all, std_model=std_model, intens_model=intens_model)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#
