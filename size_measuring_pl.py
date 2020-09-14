@@ -15,6 +15,15 @@ with open('../recon_0002/photons.txt', 'r') as f:
 
 emc = reademc.EMCReader(emc_flist,det)
 n_frames = emc.num_frames
+
+clist = np.array([f['num_data'] for f in emc.flist])
+running_num = np.zeros(np.max(clist))
+running_num[0:clist[0]] = np.int( emc_flist[0][75:78] )
+for i in range(len(clist)-1):
+    running_num[clist[i]:clist[i+1]] = np.int( emc_flist[i+1][75:78] )
+
+
+
 mask_emc0 = emc.get_frame(1).mask.ravel()
 mask_emc0 = np.array([ not i for i in mask_emc0]).reshape(512, 256)
 mask_center = np.load('../aux/mask_center_cmc_0.npy')                           #mask file
@@ -83,5 +92,12 @@ intens_tot = np.frombuffer(intens_tot.get_obj())
 cc = np.frombuffer(cc.get_obj())
 error = np.frombuffer(error.get_obj())
 ###############################################
+with h5py.File('diameter_weighted_error_mask0.h5', 'w') as f:
+    f['Run_num'] = running_num
+    f['diameter'] = dia
+    f['intens_tot'] = intens_tot
+    f['error'] = error
+    f['cc'] = cc
+
 
 np.savez('diameter_weighted_error_mask0.npz', dia=dia, intens=intens_tot, error=error, cc=cc)
