@@ -3,4 +3,4 @@ int2error_modelling.py: Calculate the intensity - sizing error relation by givin
 Flash_aunp_2020.py: Summary the experimental results, size - delay relations per different Laser energy.
 weak_signal.py: analyse 60% subset data running means.
 
-LS_12.py/LS_22.py/LS_60.py Lombscargle signal extraction on three different subsets
+LS_00.py Lombscargle signal extraction on three different subsets
