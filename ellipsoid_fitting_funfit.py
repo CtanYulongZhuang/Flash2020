@@ -113,6 +113,9 @@ def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i):
             Pa, Pb = curve_fit(intens, X, data_i, p0, maxfev=10000)
         except:
             pass
+        #perr = np.sqrt(np.diag(Pb)).
+
+
         angle[i] = Pa[2]
         dia_a[i] = max(Pa[0],Pa[1])
         dia_b[i] = min(Pa[0],Pa[1])
