@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 import multiprocessing as mp
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-#/asap3/flash/gpfs/bl1/2020/data/11007613/shared/aux/
+#/asap3/flash/gpfs/bl1/2020/data/11007613/shared/ana
 
 
 import h5py
@@ -42,11 +42,27 @@ def intens(X, a, b, tp, scl):
 #[247,255] Closest point to the center rmin = 67
 intrad0 = np.load('../aux/intrad_004.npy')
 intrad = intrad0[256:768,256:512]
-x0,y0 = np.indices((512,256)); x0-=247; y0-=(255+67)
+x0,y0 = np.indices((512,256)); x0-=246; y0-=(255+67)
 plt.scatter(x0,y0,c = intrad)
 floatang = np.arccos(x0/intrad)
-flat_floatang = floatang.ravel()
-flat_intrad = intrad.ravel()
+calrad = np.ceil(np.sqrt(x0**2+y0**2))
+
+plt.subplot(221)
+plt.imshow(calrad.T)
+plt.xlabel('model_rad')
+plt.colorbar()
+plt.subplot(222)
+plt.imshow(intrad.T)
+plt.xlabel('det_rad')
+plt.colorbar()
+plt.subplot(223)
+plt.imshow((calrad-intrad).T)
+plt.xlabel('model - det')
+plt.colorbar()
+plt.subplot(224)
+plt.imshow(floatang.T)
+plt.xlabel('angle')
+plt.colorbar()
 
 #poisson
 det = detector.Detector('../aux/det_intrad4.h5', mask_flag=True)
@@ -67,16 +83,8 @@ mask_emc0 = emc.get_frame(1).mask.ravel()
 mask_emc0 = np.array([ not i for i in mask_emc0]).reshape(512, 256)
 mask_center = np.load('../aux/mask_center_cmc_0.npy')                           #mask file
 
-intrad = np.load('../aux/intrad_004.npy')
-intrad = intrad[256:768,256:512]
 
 #Absolute coordinate
-x0,y0 = np.indices((512,256)); x0-=247; y0-=(255+67)
-#plt.scatter(x0,y0,c = intrad)
-floatang = np.arccos(x0/intrad)
-divang = np.round(floatang, 1)
-divrad = intrad//2*2
-
 flotrad = intrad[mask_center]
 flotang = floatang[mask_center]
 x1 = x0[mask_center]
@@ -91,6 +99,7 @@ fis = interp1d(np.log10(int_models), std_smooth,'cubic')
 
 
 X = [flotrad, flotang]
+pie = np.pi
 ###############################################
 intens_tot = mp.Array(ctypes.c_double, n_frames)
 cc = mp.Array(ctypes.c_double, n_frames)
@@ -99,18 +108,20 @@ dia_a = mp.Array(ctypes.c_double, n_frames)
 dia_b = mp.Array(ctypes.c_double, n_frames)
 scale = mp.Array(ctypes.c_double, n_frames)
 sum_i = mp.Array(ctypes.c_double, n_frames)
-
+pocv_diag = mp.Array(ctypes.c_double, n_frames*4)
 def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i):
     irange = indices[rank::nproc]
 
     for i in irange:
         f_i = emc.get_frame(i)
         data_i = f_i.data[mask_center]
-        p0 = 17., 15., 0, 0.1
+        p0 = 15., 15., 0, 0.1
+        p_bounds = ((5.0,5.0,-4,0.0), (60.0,60.0,4,1.0))
         #Pa, Pb = curve_fit(intens, X, data_i, p0, maxfev=100000)
         Pa = [0,0,0,0]
+        Pb = [[0,0,0,0],[0,0,0,0],[0,0,0,0,0],[0,0,0,0]]
         try:
-            Pa, Pb = curve_fit(intens, X, data_i, p0, maxfev=10000)
+            Pa, Pb = curve_fit(intens, X, data_i, p0, bounds=p_bounds, maxfev=10000)
         except:
             pass
         #perr = np.sqrt(np.diag(Pb)).
@@ -121,6 +132,7 @@ def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i):
         dia_b[i] = min(Pa[0],Pa[1])
         scale[i] = Pa[3]
         sum_i[i] = np.sum(data_i)
+        pocv_diag[i*4:(i+1)*4] = Pb[0][0], Pb[1][1], Pb[2][2], Pb[3][3]
 
         if rank == 0:
             print("CC (%d):"%i, ' sum_i = ', np.sum(data_i),  ' dia_a = ', dia_a[i], ' dia_b = ', dia_b[i], ' angle = ', angle[i])
@@ -136,28 +148,35 @@ dia_b = np.frombuffer(dia_b.get_obj())
 angle = np.frombuffer(angle.get_obj())
 scale = np.frombuffer(scale.get_obj())
 sum_i = np.frombuffer(sum_i.get_obj())
+pocv_diag = np.frombuffer(pocv.get_obj())
+pocvx_diag = pocv_diag.reshape(n_frames,4)
 ###############################################
-with h5py.File('diameter_ab.h5', 'w') as f:
+with h5py.File('diameter_ab_cv_corr.h5', 'w') as f:
     f['dia_a'] = dia_a
     f['dia_b'] = dia_b
     f['angle'] = angle
     f['scale'] = scale
     f['sum_i'] = sum_i
+    f['pocvx_diag'] = pocvx_diag
 
 
 
 
+ng = np.where(sum_i > 500)[0]
+plt.figure(figsize=(10,8))
+plt.hist(dia_a[ng],bins=50,range=(0,50), alpha=0.5, label='Major')
+plt.hist(dia_b[ng],bins=50,range=(0,50), alpha=0.5, label='Minor')
+plt.legend()
+plt.xlabel('r')
 
 
-
-X = [flat_intrad, flat_floatang]
-intensity_map = intens(X, dia_a[0], dia_b[0], angle[0])
-plt.imshow(np.log10(intensity_map.reshape(512,256)))
-
-
-
-
-
+import matplotlib as mpl
+from matplotlib import cm
+plt.figure(figsize=(5,4))
+plt.hist2d(dia_a[ng],dia_b[ng], bins=100, range=[[5,25],[5,25]],norm=mpl.colors.LogNorm(),cmap=cm.Blues)
+plt.colorbar()
+plt.xlabel('Major')
+plt.ylabel('Minor')
 
 
 
