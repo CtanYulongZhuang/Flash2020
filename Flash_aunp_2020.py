@@ -44,6 +44,16 @@ error01 = data1['error'][:]
 data1.close()
 error01_all = np.sqrt(error01**2 + 1.6090532403672295**2)
 
+with h5py.File('diameter_ab.h5', 'w') as f:
+    dia_a = f['dia_a']
+    dia_b = f['dia_b']
+    angle = f['angle']
+    scale = f['scale']
+    sum_i = f['sum_i']
+    #f['pocv'] = pocvx
+
+
+
 info1 = h5py.File('info_107_152.h5','r')
 delay01 = info1['delay_ps'][:]
 pp_attenuation = info1['pp_attenuation'][:]   #[0.175, 0.4  , 0.6  , 0.78 , 0.88 ]
