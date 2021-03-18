@@ -50,7 +50,7 @@ fis = interp1d(np.log10(int_models), std_smooth,'cubic')
 
 
 
-radcount = np.zeros(intrad.max() + 1)
+radcount = np.zeros(np.int(intrad.max()) + 1)
 np.add.at(radcount, np.int(intrad), mask_center)
 radmask = (radcount > 10)
 radcount[radcount == 0] = 1
