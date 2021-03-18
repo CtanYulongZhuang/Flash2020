@@ -9,14 +9,14 @@ from scipy.interpolate import interp1d
 import multiprocessing as mp
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-#/asap3/flash/gpfs/bl1/2020/data/11007613/shared/ana
+Path = '/asap3/flash/gpfs/bl1/2020/data/11007613/shared/'
 
 
 import h5py
-with h5py.File('../aux/det_intrad4_corr.h5', "r") as data_tem:
+with h5py.File(Path + 'aux/det_intrad4_corr.h5', "r") as data_tem:
     keys = data_tem.keys()
 
-data_tem = h5py.File('../aux/YZ_det_intrad4_corr.h5', "r")
+data_tem = h5py.File(Path + 'aux/YZ_det_intrad4_corr.h5', "r")
 qx = data_tem['qx'][:]
 qy = data_tem['qy'][:]
 qz = data_tem['qz'][:]
@@ -37,7 +37,7 @@ def intens(X, a, b, tp, scl):
     return intensity
 
 
-f = h5py.File('Geomotry_corr_yulong.h5','r')
+f = h5py.File(Path + 'aux/Geomotry_corr_yulong.h5','r')
 intrad0 = f['intrad0'][:]
 intrad1 = f['intrad1'][:]
 xcorr0 = f['x0'][:]
@@ -53,8 +53,8 @@ floatang0 = np.arccos(xcorr0/intrad0)
 
 
 #poisson
-det = detector.Detector('../aux/det_intrad4.h5', mask_flag=True)
-with open('../recon_0002/photons.txt', 'r') as f:
+det = detector.Detector(Path + 'aux/det_intrad4.h5', mask_flag=True)
+with open(Path + 'recon_0002/photons.txt', 'r') as f:
      emc_flist = [i.strip() for i in f.readlines()]
 
 emc = reademc.EMCReader(emc_flist,det)
@@ -69,7 +69,7 @@ n_frames = emc.num_frames
 
 mask_emc0 = emc.get_frame(1).mask.ravel()
 mask_emc0 = np.array([ not i for i in mask_emc0]).reshape(512, 256)
-mask_center = np.load('../aux/mask_center_cmc_0.npy')                           #mask file
+mask_center = np.load(Path+'aux/mask_center_cmc_0.npy')                           #mask file
 
 
 #Absolute coordinate
@@ -130,7 +130,7 @@ pocv_diag = np.frombuffer(pocv_diag.get_obj())
 
 pocvx_diag = pocv_diag.reshape(n_frames,4)
 ###############################################
-with h5py.File('diameter_ab_cv_centre_corr.h5', 'w') as f:
+with h5py.File(Path+'aux/diameter_ab_cv_centre_corr.h5', 'w') as f:
     f['dia_a'] = dia_a
     f['dia_b'] = dia_b
     f['angle'] = angle
