@@ -8,9 +8,11 @@ from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 import multiprocessing as mp
 
+Path = '/asap3/flash/gpfs/bl1/2020/data/11007613/shared/'
+
 #poisson
-det = detector.Detector('../aux/det_intrad4.h5', mask_flag=True)
-with open('../recon_0002/photons.txt', 'r') as f:
+det = detector.Detector(Path + 'aux/det_intrad4.h5', mask_flag=True)
+with open(Path + 'recon_0002/photons.txt', 'r') as f:
      emc_flist = [i.strip() for i in f.readlines()]
 
 emc = reademc.EMCReader(emc_flist,det)
@@ -23,19 +25,28 @@ for i in range(len(clist)-1):
     running_num[clist[i]:clist[i+1]] = np.int( emc_flist[i+1][75:78] )
 
 
+f = h5py.File(Path + 'aux/Geomotry_corr_yulong.h5','r')
+intrad0 = f['intrad0'][:]
+intrad1 = f['intrad1'][:]
+xcorr0 = f['x0'][:]
+ycorr0 = f['y0'][:]
+xcorr1 = f['x1'][:]
+ycorr1 = f['y1'][:]
+mask_center = f['mask_center'][:]
+f.close()
 
-mask_emc0 = emc.get_frame(1).mask.ravel()
-mask_emc0 = np.array([ not i for i in mask_emc0]).reshape(512, 256)
-mask_center = np.load('../aux/mask_center_cmc_0.npy')                           #mask file
-
-intrad = np.load('../aux/intrad_004.npy')
-intrad = intrad[256:768,256:512]
+intrad = intrad0
 flotrad = intrad[mask_center]
-s_s = np.load('../aux/int2std_model_r30_mask0_weighted.npz')
+
+
+
+s_s = np.load(Path + 'aux/int2std_model_r30_mask0_weighted.npz')
 std_models = s_s['std_model']
 int_models = s_s['intens_model']
 std_smooth = savgol_filter(std_models, 51, 3)
 fis = interp1d(np.log10(int_models), std_smooth,'cubic')
+
+
 
 
 radcount = np.zeros(intrad.max() + 1)
@@ -92,12 +103,9 @@ intens_tot = np.frombuffer(intens_tot.get_obj())
 cc = np.frombuffer(cc.get_obj())
 error = np.frombuffer(error.get_obj())
 ###############################################
-with h5py.File('diameter_weighted_error_mask0.h5', 'w') as f:
+with h5py.File(Path + 'aux/diameter_corr_mask0.h5', 'w') as f:
     f['Run_num'] = running_num
     f['diameter'] = dia
     f['intens_tot'] = intens_tot
     f['error'] = error
     f['cc'] = cc
-
-
-np.savez('diameter_weighted_error_mask0.npz', dia=dia, intens=intens_tot, error=error, cc=cc)
