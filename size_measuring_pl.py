@@ -3,6 +3,7 @@ sys.path.append('/home/ayyerkar/.local/dragonfly/utils/py_src/')
 import detector
 import reademc
 import numpy as np
+import h5py
 import ctypes
 from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
