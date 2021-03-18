@@ -60,18 +60,6 @@ with open(Path + 'recon_0002/photons.txt', 'r') as f:
 emc = reademc.EMCReader(emc_flist,det)
 n_frames = emc.num_frames
 
-#clist = np.array([f['num_data'] for f in emc.flist])
-#running_num = np.zeros(np.max(clist))
-#running_num[0:clist[0]] = np.int( emc_flist[0][75:78] )
-#for i in range(len(clist)-1):
-#    running_num[clist[i]:clist[i+1]] = np.int( emc_flist[i+1][75:78] )
-
-
-mask_emc0 = emc.get_frame(1).mask.ravel()
-mask_emc0 = np.array([ not i for i in mask_emc0]).reshape(512, 256)
-mask_center = np.load(Path+'aux/mask_center_cmc_0.npy')                           #mask file
-
-
 #Absolute coordinate
 flotrad = intrad0[mask_center]
 flotang = floatang0[mask_center]
@@ -114,6 +102,7 @@ def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i, pocv_diag):
 
         if rank == 0:
             print("CC (%d):"%i, ' sum_i = ', np.sum(data_i),  ' dia_a = ', dia_a[i], ' dia_b = ', dia_b[i], ' angle = ', angle[i])
+
 
 
 nproc = 16
