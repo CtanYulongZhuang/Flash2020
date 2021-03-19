@@ -36,7 +36,7 @@ ycorr1 = f['y1'][:]
 mask_center = f['mask_center'][:]
 f.close()
 
-intrad = np.ceil(intrad0)
+intrad = np.ceil(intrad0).astype(int)
 flotrad = intrad[mask_center]
 
 
@@ -51,7 +51,7 @@ fis = interp1d(np.log10(int_models), std_smooth,'cubic')
 
 
 radcount = np.zeros(intrad.max() + 1)
-np.add.at(radcount, np.int(intrad), mask_center)
+np.add.at(radcount, intrad, mask_center)
 radmask = (radcount > 10)
 radcount[radcount == 0] = 1
 
