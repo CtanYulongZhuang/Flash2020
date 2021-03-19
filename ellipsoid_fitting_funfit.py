@@ -68,46 +68,57 @@ y1 = ycorr0[mask_center]
 
 X = [flotrad, flotang]
 pie = np.pi
+
+
+
 ###############################################
-angle = mp.Array(ctypes.c_double, n_frames)
 dia_a = mp.Array(ctypes.c_double, n_frames)
 dia_b = mp.Array(ctypes.c_double, n_frames)
+angle = mp.Array(ctypes.c_double, n_frames)
 scale = mp.Array(ctypes.c_double, n_frames)
+angle_err = mp.Array(ctypes.c_double, n_frames)
+dia_a_err = mp.Array(ctypes.c_double, n_frames)
+dia_b_err = mp.Array(ctypes.c_double, n_frames)
 sum_i = mp.Array(ctypes.c_double, n_frames)
-pocv_diag = mp.Array(ctypes.c_double, n_frames*4)
-def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i, pocv_diag):
+
+def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i, dia_a_err, dia_b_err, angle_err):
     irange = indices[rank::nproc]
 
     for i in irange:
         f_i = emc.get_frame(i)
         data_i = f_i.data[mask_center]
         p0 = 15., 15., 0, 0.1
-        p_bounds = ((5.0,5.0,-4,0.0), (60.0,60.0,4,1.0))
-        Pa = [0,0,0,0]
-        Pb = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
+        #p_bounds = ((5.0,5.0,-4,0.0), (60.0,60.0,4,1.0))
         try:
-            Pa, Pb = curve_fit(intens, X, data_i, p0, bounds=p_bounds)
+            Pa, Pb = curve_fit(intens, X, data_i, p0)#, bounds=p_bounds)
         except:
             pass
         #Pa, Pb = curve_fit(intens, X, data_i, p0, bounds=p_bounds, maxfev=10000)
+        if (Pa[0] >= Pa[1]):
+            dia_a[i] = Pa[0]
+            dia_b[i] = Pa[1]
+            dia_a_err = Pb[0][0]
+            dia_b_err = Pb[1][1]
+        if (Pa[0] < Pa[1]):
+            dia_a[i] = Pa[1]
+            dia_b[i] = Pa[0]
+            dia_a_err = Pb[1][1]
+            dia_b_err = Pb[0][0]
+
         angle[i] = Pa[2]
-        dia_a[i] = max(Pa[0],Pa[1])
-        dia_b[i] = min(Pa[0],Pa[1])
+        angle[i] = Pb[2][2]
         scale[i] = Pa[3]
         sum_i[i] = np.sum(data_i)
-        pocv_diag[i*4] = Pb[0][0]
-        pocv_diag[i*4+1] = Pb[1][1]
-        pocv_diag[i*4+2] = Pb[2][2]
-        pocv_diag[i*4+3] = Pb[3][3]
 
         if rank == 0:
             print("CC (%d):"%i, ' sum_i = ', np.sum(data_i),  ' dia_a = ', dia_a[i], ' dia_b = ', dia_b[i], ' angle = ', angle[i])
 
 
 
+
 nproc = 16
 ind = np.arange(n_frames)
-jobs = [mp.Process(target=mp_worker, args=(rank, ind, dia_a, dia_b, angle, scale, sum_i, pocv_diag)) for rank in range(nproc)]
+jobs = [mp.Process(target=mp_worker, args=(rank, ind, dia_a, dia_b, angle, scale, sum_i, dia_a_err, dia_b_err, angle_err)) for rank in range(nproc)]
 [i.start() for i in jobs]
 [i.join() for i in jobs]
 dia_a = np.frombuffer(dia_a.get_obj())
@@ -115,14 +126,17 @@ dia_b = np.frombuffer(dia_b.get_obj())
 angle = np.frombuffer(angle.get_obj())
 scale = np.frombuffer(scale.get_obj())
 sum_i = np.frombuffer(sum_i.get_obj())
-pocv_diag = np.frombuffer(pocv_diag.get_obj())
+angle_err = np.frombuffer(angle_err.get_obj())
+dia_a_err = np.frombuffer(dia_a_err.get_obj())
+dia_b_err = np.frombuffer(dia_b_err.get_obj())
 
-pocvx_diag = pocv_diag.reshape(n_frames,4)
-###############################################
+
 with h5py.File(Path+'aux/diameter_ab_cv_centre_corr.h5', 'w') as f:
     f['dia_a'] = dia_a
     f['dia_b'] = dia_b
     f['angle'] = angle
     f['scale'] = scale
     f['sum_i'] = sum_i
-    f['pocvx_diag'] = pocvx_diag
+    f['angle_err'] = angle_err
+    f['dia_a_err'] = dia_a_err
+    f['dia_b_err'] = dia_b_err
