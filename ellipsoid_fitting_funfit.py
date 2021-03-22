@@ -87,8 +87,8 @@ def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i, dia_a_err, dia_b
     for i in irange:
         f_i = emc.get_frame(i)
         data_i = f_i.data[mask_center]
-        p0 = 15., 15., 0, 0.1
-        #p_bounds = ((5.0,5.0,-4,0.0), (60.0,60.0,4,1.0))
+        p0 = 15., 15., -1, 0.01
+        #p_bounds = ((5,5,-4,0), (50,50,4,10))
         try:
             Pa, Pb = curve_fit(intens, X, data_i, p0)#, bounds=p_bounds)
         except:
@@ -106,13 +106,12 @@ def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i, dia_a_err, dia_b
             dia_b_err = Pb[0][0]
 
         angle[i] = Pa[2]
-        angle[i] = Pb[2][2]
+        angle_err[i] = Pb[2][2]
         scale[i] = Pa[3]
         sum_i[i] = np.sum(data_i)
 
         if rank == 0:
-            print("CC (%d):"%i, ' sum_i = ', np.sum(data_i),  ' dia_a = ', dia_a[i], ' dia_b = ', dia_b[i], ' angle = ', angle[i])
-
+            print("CC (%d):"%i, ' sum_i = ' ,np.sum(data_i) , ' Pa: ', Pa  )
 
 
 
@@ -131,7 +130,7 @@ dia_a_err = np.frombuffer(dia_a_err.get_obj())
 dia_b_err = np.frombuffer(dia_b_err.get_obj())
 
 
-with h5py.File(Path+'aux/diameter_ab_cv_centre_corr.h5', 'w') as f:
+with h5py.File(Path+'aux/diameter_ab_cv_centre_corr_neg_angle.h5', 'w') as f:
     f['dia_a'] = dia_a
     f['dia_b'] = dia_b
     f['angle'] = angle
