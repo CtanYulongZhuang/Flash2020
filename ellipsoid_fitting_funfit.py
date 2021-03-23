@@ -97,13 +97,13 @@ def mp_worker(rank, indices, dia_a, dia_b, angle, scale, sum_i, dia_a_err, dia_b
         if (Pa[0] >= Pa[1]):
             dia_a[i] = Pa[0]
             dia_b[i] = Pa[1]
-            dia_a_err = Pb[0][0]
-            dia_b_err = Pb[1][1]
+            dia_a_err[i] = Pb[0][0]
+            dia_b_err[i] = Pb[1][1]
         if (Pa[0] < Pa[1]):
             dia_a[i] = Pa[1]
             dia_b[i] = Pa[0]
-            dia_a_err = Pb[1][1]
-            dia_b_err = Pb[0][0]
+            dia_a_err[i] = Pb[1][1]
+            dia_b_err[i] = Pb[0][0]
 
         angle[i] = Pa[2]
         angle_err[i] = Pb[2][2]
